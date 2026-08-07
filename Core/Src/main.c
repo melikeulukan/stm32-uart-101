@@ -54,6 +54,7 @@ DMA_HandleTypeDef hdma_usart2_rx;
 /* USER CODE BEGIN PV */
 char tx1_buffer[64];     //gönderilecek veri
 uint8_t rx2_buffer[64];  //alınan veri
+uint8_t rx2_main_buffer[64];
 volatile uint8_t rx2_flag = 0;
 volatile uint16_t rx2_len=0;
 uint32_t rx2_counter = 0;
@@ -158,16 +159,14 @@ int main(void)
       rx2_flag=0;
       rx2_counter++;
 
-      rx2_buffer[rx2_len] = '\0';
+      rx2_main_buffer[rx2_len] = '\0';
 
       char status_msg[128];
-      int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] (len: %u) - usart2 received: %s", rx2_counter, rx2_len, rx2_buffer);
+      int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] (len: %u) - usart2 received: %s", rx2_counter, rx2_len, rx2_main_buffer);
       HAL_UART_Transmit(&huart3, (uint8_t*)status_msg, len, HAL_MAX_DELAY);
 
-      HAL_UART_DMAStop(&huart2);
-      HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx2_buffer, sizeof(rx2_buffer));
-      __HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
-    }else
+    }
+    else
     {
       char err_msg[]="no data received\r\n";
       HAL_UART_Transmit(&huart3, (uint8_t*)err_msg, sizeof(err_msg)-1, HAL_MAX_DELAY);
@@ -454,8 +453,14 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if (huart->Instance == USART2)
     {
+        HAL_UART_DMAStop(&huart2); // Stop the DMA transfer to process the received data
+
+        memcpy(rx2_main_buffer, rx2_buffer, Size); // Copy the received data to the main buffer
         rx2_flag = 1;
         rx2_len = Size;
+
+        HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx2_buffer, sizeof(rx2_buffer));
+        __HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
     }
 }
 

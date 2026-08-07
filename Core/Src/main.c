@@ -22,6 +22,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include <string.h>
+#include <stdio.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,7 +50,10 @@ UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-
+uint8_t tx1_msg[]= "Msg from USART1\r\n";
+uint8_t rx2_buffer[32];
+volatile uint8_t rx2_flag = 0;
+uint32_t rx2_counter = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -100,37 +106,41 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  
+  HAL_UART_Receive_IT(&huart2, rx2_buffer, 17); 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint32_t delay_ms = 1000;
 
   while (1)
   {
-    HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
-    HAL_Delay(delay_ms);
+    HAL_UART_Transmit(&huart1, tx1_msg, sizeof(tx1_msg) - 1, HAL_MAX_DELAY);
 
-    //uart
-    if(HAL_GPIO_ReadPin(USER_Btn_GPIO_Port, USER_Btn_Pin ) == GPIO_PIN_SET)
-    {
-      char msg2[] = "button pressed!\r\n";
-      HAL_UART_Transmit(&huart3, (uint8_t*)msg2, sizeof(msg2)-1, HAL_MAX_DELAY);
+    if (rx2_flag == 1) {
+        rx2_flag = 0;
+        rx2_counter++;
 
-      delay_ms= (delay_ms == 1000) ? 50 : 1000;
-      HAL_Delay(200);
+        rx2_buffer[17] = '\0';
+        
+        char status_msg[128];
+        int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] success - usart2 received: %s", rx2_counter, rx2_buffer);
+        HAL_UART_Transmit(&huart3, (uint8_t*)status_msg, len, HAL_MAX_DELAY);
+    } else {
+        char err_msg[] = "no data received\r\n";
+        HAL_UART_Transmit(&huart3, (uint8_t*)err_msg, sizeof(err_msg)-1, HAL_MAX_DELAY);
     }
 
-    char msg[] = "Hello from STM32!\r\n";
-    HAL_UART_Transmit(&huart3, (uint8_t*)msg, sizeof(msg)-1, HAL_MAX_DELAY);
+    HAL_Delay(1000);
+  }
+
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
-}
+
 
 /**
   * @brief System Clock Configuration
@@ -381,6 +391,14 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2)
+    {
+        rx2_flag = 1;
+        HAL_UART_Receive_IT(&huart2, rx2_buffer, 17);
+    }
+}
 
 /* USER CODE END 4 */
 

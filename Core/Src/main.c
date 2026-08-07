@@ -52,12 +52,14 @@ DMA_HandleTypeDef hdma_usart1_tx;
 DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
-uint8_t tx1_msg[]= "Msg from USART1\r\n";
-uint8_t rx2_buffer[32];
+char tx1_buffer[64];     //gönderilecek veri
+uint8_t rx2_buffer[64];  //alınan veri
 volatile uint8_t rx2_flag = 0;
+volatile uint16_t rx2_len=0;
 uint32_t rx2_counter = 0;
 
 volatile uint8_t tx1_busy = 0;
+uint8_t sim_step=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -113,7 +115,10 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   
-  HAL_UART_Receive_DMA(&huart2, rx2_buffer, 17); 
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx2_buffer, sizeof(rx2_buffer));
+  
+  // Half transfer interrupt kapatıldı. Sadece transfer tamamlandığında kesme alacağız.
+  __HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT); 
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -125,19 +130,43 @@ int main(void)
     if (!tx1_busy)
     {
       tx1_busy = 1;
-      HAL_UART_Transmit_DMA(&huart1, tx1_msg, sizeof(tx1_msg)-1);
-     // char cpu_log[] = ">>> [CPU] DMA'ya emri verdim, ben isime devam ediyorum!\r\n";
-    //HAL_UART_Transmit(&huart3, (uint8_t*)cpu_log, sizeof(cpu_log)-1, HAL_MAX_DELAY);
+
+      //messages of different length
+      if(sim_step==0)
+      {
+        sprintf(tx1_buffer,  "short\r\n");
+      }
+      else if(sim_step==1)
+      {
+        sprintf(tx1_buffer, "this is a longer message\r\n");
+      }
+      else if(sim_step==2)
+      {
+        sprintf(tx1_buffer, "this is appearently a long long message, like really long\r\n");
+      }
+      sim_step++;
+      if(sim_step>2)
+      {
+        sim_step=0;
+      }
+
+      HAL_UART_Transmit_DMA(&huart1, (uint8_t*)tx1_buffer, strlen(tx1_buffer));
     }
 
     if(rx2_flag==1)
     {
       rx2_flag=0;
       rx2_counter++;
-      rx2_buffer[17] = '\0';
+
+      rx2_buffer[rx2_len] = '\0';
+
       char status_msg[128];
-      int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] success - usart2 received: %s", rx2_counter, rx2_buffer);
+      int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] (len: %u) - usart2 received: %s", rx2_counter, rx2_len, rx2_buffer);
       HAL_UART_Transmit(&huart3, (uint8_t*)status_msg, len, HAL_MAX_DELAY);
+
+      HAL_UART_DMAStop(&huart2);
+      HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx2_buffer, sizeof(rx2_buffer));
+      __HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
     }else
     {
       char err_msg[]="no data received\r\n";
@@ -151,6 +180,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
+
 
 /**
   * @brief System Clock Configuration
@@ -420,13 +450,12 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if (huart->Instance == USART2)
     {
         rx2_flag = 1;
-
-        HAL_UART_Receive_DMA(&huart2, rx2_buffer, 17);
+        rx2_len = Size;
     }
 }
 

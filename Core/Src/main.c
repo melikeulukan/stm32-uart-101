@@ -48,17 +48,22 @@ RTC_HandleTypeDef hrtc;
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
+DMA_HandleTypeDef hdma_usart1_tx;
+DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
 uint8_t tx1_msg[]= "Msg from USART1\r\n";
 uint8_t rx2_buffer[32];
 volatile uint8_t rx2_flag = 0;
 uint32_t rx2_counter = 0;
+
+volatile uint8_t tx1_busy = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_RTC_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_USART1_UART_Init(void);
@@ -101,13 +106,14 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_RTC_Init();
   MX_USART3_UART_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   
-  HAL_UART_Receive_IT(&huart2, rx2_buffer, 17); 
+  HAL_UART_Receive_DMA(&huart2, rx2_buffer, 17); 
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -115,32 +121,36 @@ int main(void)
 
   while (1)
   {
-    HAL_UART_Transmit(&huart1, tx1_msg, sizeof(tx1_msg) - 1, HAL_MAX_DELAY);
 
-    if (rx2_flag == 1) {
-        rx2_flag = 0;
-        rx2_counter++;
-
-        rx2_buffer[17] = '\0';
-        
-        char status_msg[128];
-        int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] success - usart2 received: %s", rx2_counter, rx2_buffer);
-        HAL_UART_Transmit(&huart3, (uint8_t*)status_msg, len, HAL_MAX_DELAY);
-    } else {
-        char err_msg[] = "no data received\r\n";
-        HAL_UART_Transmit(&huart3, (uint8_t*)err_msg, sizeof(err_msg)-1, HAL_MAX_DELAY);
+    if (!tx1_busy)
+    {
+      tx1_busy = 1;
+      HAL_UART_Transmit_DMA(&huart1, tx1_msg, sizeof(tx1_msg)-1);
+     // char cpu_log[] = ">>> [CPU] DMA'ya emri verdim, ben isime devam ediyorum!\r\n";
+    //HAL_UART_Transmit(&huart3, (uint8_t*)cpu_log, sizeof(cpu_log)-1, HAL_MAX_DELAY);
     }
 
+    if(rx2_flag==1)
+    {
+      rx2_flag=0;
+      rx2_counter++;
+      rx2_buffer[17] = '\0';
+      char status_msg[128];
+      int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] success - usart2 received: %s", rx2_counter, rx2_buffer);
+      HAL_UART_Transmit(&huart3, (uint8_t*)status_msg, len, HAL_MAX_DELAY);
+    }else
+    {
+      char err_msg[]="no data received\r\n";
+      HAL_UART_Transmit(&huart3, (uint8_t*)err_msg, sizeof(err_msg)-1, HAL_MAX_DELAY);
+    }
     HAL_Delay(1000);
   }
-
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
-
 
 /**
   * @brief System Clock Configuration
@@ -334,6 +344,25 @@ static void MX_USART3_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel4_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
+  /* DMA1_Channel6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -396,7 +425,17 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     if (huart->Instance == USART2)
     {
         rx2_flag = 1;
-        HAL_UART_Receive_IT(&huart2, rx2_buffer, 17);
+
+        HAL_UART_Receive_DMA(&huart2, rx2_buffer, 17);
+    }
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1)
+    {
+        tx1_busy = 0;
+
     }
 }
 

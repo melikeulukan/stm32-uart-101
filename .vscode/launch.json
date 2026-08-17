@@ -1,0 +1,10 @@
+{
+  "name": "Debug STM32",
+  "cwd": "${workspaceFolder}",
+  "executable": "${workspaceFolder}/build/Debug/blink_blink.elf",
+  "request": "launch",
+  "type": "cortex-debug",
+  "servertype": "stlink",
+  "runToEntryPoint": "main",
+  "device": "STM32F303ZE"
+}

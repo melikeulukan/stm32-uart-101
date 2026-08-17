@@ -631,8 +631,12 @@ void StartRxProcessTask(void *argument)
     char err_msg[]="no data received\r\n";
     HAL_UART_Transmit(&huart3, (uint8_t*)err_msg, sizeof(err_msg)-1, HAL_MAX_DELAY);
   }
+  UBaseType_t freeStack = uxTaskGetStackHighWaterMark(NULL); // NULL = kendi task'ı
+  char stack_msg[64];
+  int len = snprintf(stack_msg, sizeof(stack_msg), "[RxProcessTask] free stack: %lu words (%lu bytes)\r\n", (unsigned long)freeStack, (unsigned long)(freeStack * 4));
+  HAL_UART_Transmit(&huart3, (uint8_t*)stack_msg, len, HAL_MAX_DELAY);
   osDelay(1000);
-}
+  }
 }
 /**
   * @brief  Period elapsed callback in non blocking mode

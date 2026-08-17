@@ -18,9 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "task.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -51,6 +53,28 @@ UART_HandleTypeDef huart3;
 DMA_HandleTypeDef hdma_usart1_tx;
 DMA_HandleTypeDef hdma_usart2_rx;
 
+/* Definitions for defaultTask */
+osThreadId_t defaultTaskHandle;
+const osThreadAttr_t defaultTask_attributes = {
+  .name = "defaultTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
+
+osThreadId_t txTaskHandle;
+const osThreadAttr_t txTask_attributes = {
+.name= "TxTask",
+.stack_size = 128 * 4,
+.priority = (osPriority_t) osPriorityNormal,
+};
+
+osThreadId_t rxTaskHandle;
+const osThreadAttr_t rxProcessTask_attributes = {
+.name= "RxProcessTask",
+.stack_size = 512 * 4,
+.priority = (osPriority_t) osPriorityAboveNormal,
+};
+
 /* USER CODE BEGIN PV */
 char tx1_buffer[64];     //gönderilecek veri
 uint8_t rx2_buffer[64];  //alınan veri
@@ -71,6 +95,10 @@ static void MX_RTC_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
+void StartDefaultTask(void *argument);
+void StartTxTask(void *argument);
+void StartRxProcessTask(void *argument);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -120,11 +148,51 @@ int main(void)
   
   // Half transfer interrupt kapatıldı. Sadece transfer tamamlandığında kesme alacağız.
   __HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT); 
+
+
   /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of defaultTask */
+  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  txTaskHandle = osThreadNew(StartTxTask, NULL, &txTask_attributes);
+  rxTaskHandle = osThreadNew(StartRxProcessTask, NULL, &rxProcessTask_attributes);
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+  /* USER CODE END RTOS_EVENTS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
+#if 0
   while (1)
   {
 
@@ -173,13 +241,12 @@ int main(void)
     }
     HAL_Delay(1000);
   }
-
+#endif
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
   /* USER CODE END 3 */
-
+}
 
 /**
   * @brief System Clock Configuration
@@ -383,10 +450,10 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Channel4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
   /* DMA1_Channel6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
 
 }
@@ -473,7 +540,121 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
     }
 }
 
+
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
+{
+  if (strcmp(pcTaskName, "TxTask") == 0)
+  {
+    HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);   // yeşil = TxTask taştı
+  }
+  else if (strcmp(pcTaskName, "RxProcessTask") == 0)
+  {
+    HAL_GPIO_WritePin(GPIOB, LD2_Pin, GPIO_PIN_SET);   // mavi = RxProcessTask taştı
+  }
+  else
+  {
+    HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET);   // kırmızı = defaultTask ya da başka
+  }
+  while(1) { }
+}
+
+
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartDefaultTask */
+/**
+  * @brief  Function implementing the defaultTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void *argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+    HAL_GPIO_TogglePin(GPIOB, LD1_Pin);
+    osDelay(500);
+  }
+  /* USER CODE END 5 */
+}
+
+void StartTxTask(void *argument)
+{
+  for(;;)
+  {
+    if(!tx1_busy)
+    {
+      tx1_busy = 1;
+
+      //messages of different length
+      if(sim_step==0)
+      {
+        sprintf(tx1_buffer,  "short\r\n");
+      }
+      else if(sim_step==1)
+      {
+        sprintf(tx1_buffer, "this is a longer message\r\n");
+      }
+      else if(sim_step==2)
+      {
+        sprintf(tx1_buffer, "this is appearently a long long message, like really long\r\n");
+      }
+      sim_step++;
+      if(sim_step>2)
+      {
+        sim_step=0;
+      }
+
+      HAL_UART_Transmit_DMA(&huart1, (uint8_t*)tx1_buffer, strlen(tx1_buffer));
+    }
+    osDelay(1000);
+  }
+}
+
+void StartRxProcessTask(void *argument)
+{
+  for(;;)
+  {
+    if(rx2_flag==1)
+    {
+      rx2_flag=0;
+      rx2_counter++;
+
+      rx2_main_buffer[rx2_len] = '\0';
+
+      char status_msg[128];
+      int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] (len: %u) - usart2 received: %s", rx2_counter, rx2_len, rx2_main_buffer);
+      HAL_UART_Transmit(&huart3, (uint8_t*)status_msg, len, HAL_MAX_DELAY);
+  }else{
+    char err_msg[]="no data received\r\n";
+    HAL_UART_Transmit(&huart3, (uint8_t*)err_msg, sizeof(err_msg)-1, HAL_MAX_DELAY);
+  }
+  osDelay(1000);
+}
+}
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6)
+  {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.

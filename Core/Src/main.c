@@ -79,9 +79,10 @@ const osThreadAttr_t rxProcessTask_attributes = {
 char tx1_buffer[64];     //gönderilecek veri
 uint8_t rx2_buffer[64];  //alınan veri
 uint8_t rx2_main_buffer[64];
-volatile uint8_t rx2_flag = 0;
 volatile uint16_t rx2_len=0;
 uint32_t rx2_counter = 0;
+
+osMessageQueueId_t rxQueueHandle;
 
 volatile uint8_t tx1_busy = 0;
 uint8_t sim_step=0;
@@ -169,6 +170,14 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
+  rxQueueHandle = osMessageQueueNew(8, sizeof(uint16_t), NULL);
+  //Capacity: 8 messages, Size, Attr: default memory allocation
+
+  if (rxQueueHandle == NULL)
+  {
+      HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET);  // queue oluşmadıysa kırmızı yak
+  }
+
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -516,6 +525,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if (huart->Instance == USART2)
@@ -523,8 +533,10 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         HAL_UART_DMAStop(&huart2); // Stop the DMA transfer to process the received data
 
         memcpy(rx2_main_buffer, rx2_buffer, Size); // Copy the received data to the main buffer
-        rx2_flag = 1;
-        rx2_len = Size;
+        
+        uint16_t len = Size;
+        osMessageQueuePut(rxQueueHandle, &len, 0,0);
+
 
         HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx2_buffer, sizeof(rx2_buffer));
         __HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
@@ -536,7 +548,6 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
     if (huart->Instance == USART1)
     {
         tx1_busy = 0;
-
     }
 }
 
@@ -587,6 +598,7 @@ void StartTxTask(void *argument)
     if(!tx1_busy)
     {
       tx1_busy = 1;
+      HAL_GPIO_TogglePin(GPIOB, LD3_Pin);  // TX gerçekten gönderiyor mu?
 
       //messages of different length
       if(sim_step==0)
@@ -615,13 +627,14 @@ void StartTxTask(void *argument)
 
 void StartRxProcessTask(void *argument)
 {
+  uint16_t received_len;
+
   for(;;)
   {
-    if(rx2_flag==1)
+    if(osMessageQueueGet(rxQueueHandle, &received_len, NULL, osWaitForever) == osOK)
     {
-      rx2_flag=0;
+      rx2_len= received_len;
       rx2_counter++;
-
       rx2_main_buffer[rx2_len] = '\0';
 
       char status_msg[128];

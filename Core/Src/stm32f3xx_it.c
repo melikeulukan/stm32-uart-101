@@ -90,12 +90,15 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-  HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET); // kırmızı LED yansın
 
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
     /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+
+    HAL_GPIO_TogglePin(GPIOB, LD3_Pin); // Kırmızı LED
+    for(volatile int i=0; i<500000; i++);
+
     /* USER CODE END W1_HardFault_IRQn 0 */
   }
 }

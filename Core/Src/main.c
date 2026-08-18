@@ -85,8 +85,8 @@ volatile uint16_t rx2_len=0;
 uint32_t rx2_counter = 0;
 
 osMessageQueueId_t rxQueueHandle;
+osSemaphoreId_t txDoneSemHandle;
 
-volatile uint8_t tx1_busy = 0;
 uint8_t sim_step=0;
 /* USER CODE END PV */
 
@@ -164,6 +164,12 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
+  txDoneSemHandle = osSemaphoreNew(1,0,NULL);
+
+  if(NULL == txDoneSemHandle)
+  {
+     HAL_GPIO_WritePin(GPIOB, LD1_Pin|LD2_Pin|LD3_Pin, GPIO_PIN_SET);
+  }
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
@@ -177,7 +183,7 @@ int main(void)
 
   if (rxQueueHandle == NULL)
   {
-      HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET);  // queue oluşmadıysa kırmızı yak
+    HAL_GPIO_WritePin(GPIOB, LD1_Pin|LD2_Pin|LD3_Pin, GPIO_PIN_SET);
   }
 
   /* USER CODE END RTOS_QUEUES */
@@ -532,9 +538,6 @@ void StartTxTask(void *argument)
 {
   for(;;)
   {
-    if(!tx1_busy)
-    {
-      tx1_busy = 1;
       HAL_GPIO_TogglePin(GPIOB, LD3_Pin);  // TX gerçekten gönderiyor mu?
 
       //messages of different length
@@ -551,14 +554,16 @@ void StartTxTask(void *argument)
         sprintf(tx1_buffer, "this is appearently a long long message, like really long\r\n");
       }
       sim_step++;
+
       if(sim_step>2)
       {
         sim_step=0;
       }
 
       HAL_UART_Transmit_DMA(&huart1, (uint8_t*)tx1_buffer, strlen(tx1_buffer));
-    }
-    osDelay(1000);
+      osSemaphoreAcquire(txDoneSemHandle, osWaitForever);
+
+      osDelay(1000);
   }
 }
 
@@ -610,7 +615,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART1)
     {
-        tx1_busy = 0;
+        osSemaphoreRelease(txDoneSemHandle); // Release the semaphore to signal that transmission is complete
     }
 }
 

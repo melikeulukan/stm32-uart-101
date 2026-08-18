@@ -61,6 +61,9 @@ const osThreadAttr_t defaultTask_attributes = {
   .priority = (osPriority_t) osPriorityLow,
 };
 
+
+/* USER CODE BEGIN PV */
+
 osThreadId_t txTaskHandle;
 const osThreadAttr_t txTask_attributes = {
 .name= "TxTask",
@@ -75,7 +78,6 @@ const osThreadAttr_t rxProcessTask_attributes = {
 .priority = (osPriority_t) osPriorityAboveNormal,
 };
 
-/* USER CODE BEGIN PV */
 char tx1_buffer[64];     //gönderilecek veri
 uint8_t rx2_buffer[64];  //alınan veri
 uint8_t rx2_main_buffer[64];
@@ -97,11 +99,11 @@ static void MX_USART3_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 void StartDefaultTask(void *argument);
-void StartTxTask(void *argument);
-void StartRxProcessTask(void *argument);
+
 
 /* USER CODE BEGIN PFP */
-
+void StartTxTask(void *argument);
+void StartRxProcessTask(void *argument);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -526,6 +528,67 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+void StartTxTask(void *argument)
+{
+  for(;;)
+  {
+    if(!tx1_busy)
+    {
+      tx1_busy = 1;
+      HAL_GPIO_TogglePin(GPIOB, LD3_Pin);  // TX gerçekten gönderiyor mu?
+
+      //messages of different length
+      if(sim_step==0)
+      {
+        sprintf(tx1_buffer,  "short\r\n");
+      }
+      else if(sim_step==1)
+      {
+        sprintf(tx1_buffer, "this is a longer message\r\n");
+      }
+      else if(sim_step==2)
+      {
+        sprintf(tx1_buffer, "this is appearently a long long message, like really long\r\n");
+      }
+      sim_step++;
+      if(sim_step>2)
+      {
+        sim_step=0;
+      }
+
+      HAL_UART_Transmit_DMA(&huart1, (uint8_t*)tx1_buffer, strlen(tx1_buffer));
+    }
+    osDelay(1000);
+  }
+}
+
+void StartRxProcessTask(void *argument)
+{
+  uint16_t received_len;
+
+  for(;;)
+  {
+    if(osMessageQueueGet(rxQueueHandle, &received_len, NULL, osWaitForever) == osOK)
+    {
+      rx2_len= received_len;
+      rx2_counter++;
+      rx2_main_buffer[rx2_len] = '\0';
+
+      char status_msg[128];
+      int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] (len: %u) - usart2 received: %s", rx2_counter, rx2_len, rx2_main_buffer);
+      HAL_UART_Transmit(&huart3, (uint8_t*)status_msg, len, HAL_MAX_DELAY);
+  }else{
+    char err_msg[]="no data received\r\n";
+    HAL_UART_Transmit(&huart3, (uint8_t*)err_msg, sizeof(err_msg)-1, HAL_MAX_DELAY);
+  }
+  UBaseType_t freeStack = uxTaskGetStackHighWaterMark(NULL); // NULL = kendi task'ı
+  char stack_msg[64];
+  int len = snprintf(stack_msg, sizeof(stack_msg), "[RxProcessTask] free stack: %lu words (%lu bytes)\r\n", (unsigned long)freeStack, (unsigned long)(freeStack * 4));
+  HAL_UART_Transmit(&huart3, (uint8_t*)stack_msg, len, HAL_MAX_DELAY);
+  osDelay(1000);
+  }
+}
+
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if (huart->Instance == USART2)
@@ -591,66 +654,7 @@ void StartDefaultTask(void *argument)
   /* USER CODE END 5 */
 }
 
-void StartTxTask(void *argument)
-{
-  for(;;)
-  {
-    if(!tx1_busy)
-    {
-      tx1_busy = 1;
-      HAL_GPIO_TogglePin(GPIOB, LD3_Pin);  // TX gerçekten gönderiyor mu?
 
-      //messages of different length
-      if(sim_step==0)
-      {
-        sprintf(tx1_buffer,  "short\r\n");
-      }
-      else if(sim_step==1)
-      {
-        sprintf(tx1_buffer, "this is a longer message\r\n");
-      }
-      else if(sim_step==2)
-      {
-        sprintf(tx1_buffer, "this is appearently a long long message, like really long\r\n");
-      }
-      sim_step++;
-      if(sim_step>2)
-      {
-        sim_step=0;
-      }
-
-      HAL_UART_Transmit_DMA(&huart1, (uint8_t*)tx1_buffer, strlen(tx1_buffer));
-    }
-    osDelay(1000);
-  }
-}
-
-void StartRxProcessTask(void *argument)
-{
-  uint16_t received_len;
-
-  for(;;)
-  {
-    if(osMessageQueueGet(rxQueueHandle, &received_len, NULL, osWaitForever) == osOK)
-    {
-      rx2_len= received_len;
-      rx2_counter++;
-      rx2_main_buffer[rx2_len] = '\0';
-
-      char status_msg[128];
-      int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] (len: %u) - usart2 received: %s", rx2_counter, rx2_len, rx2_main_buffer);
-      HAL_UART_Transmit(&huart3, (uint8_t*)status_msg, len, HAL_MAX_DELAY);
-  }else{
-    char err_msg[]="no data received\r\n";
-    HAL_UART_Transmit(&huart3, (uint8_t*)err_msg, sizeof(err_msg)-1, HAL_MAX_DELAY);
-  }
-  UBaseType_t freeStack = uxTaskGetStackHighWaterMark(NULL); // NULL = kendi task'ı
-  char stack_msg[64];
-  int len = snprintf(stack_msg, sizeof(stack_msg), "[RxProcessTask] free stack: %lu words (%lu bytes)\r\n", (unsigned long)freeStack, (unsigned long)(freeStack * 4));
-  HAL_UART_Transmit(&huart3, (uint8_t*)stack_msg, len, HAL_MAX_DELAY);
-  osDelay(1000);
-  }
-}
 /**
   * @brief  Period elapsed callback in non blocking mode
   * @note   This function is called  when TIM6 interrupt took place, inside

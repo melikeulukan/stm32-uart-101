@@ -25,7 +25,6 @@ class UartPeripheral {
     protected:
         HalHandle* huart_;
 
-        // Ham HAL cagrilarina kisa, okunakli isimler.
         void transmitDma(const uint8_t* data, std::size_t len)
         {
             HAL_UART_Transmit_DMA(huart_, data, static_cast<uint16_t>(len));

@@ -3,9 +3,9 @@
 #include "cmsis_os2.h"
 #include <cstddef>
 
-class UartTransport : public UartPeripheral {
+class UartSendTransport : public UartPeripheral {
     public:
-        UartTransport(UART_HandleTypeDef* huart, osSemaphoreId_t txDoneSem)
+        UartSendTransport(UART_HandleTypeDef* huart, osSemaphoreId_t txDoneSem)
             : UartPeripheral(huart), txDoneSem_(txDoneSem) {
         }
 

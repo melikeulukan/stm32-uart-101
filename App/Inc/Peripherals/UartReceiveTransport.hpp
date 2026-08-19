@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <cstring>
 
-
 template<std::size_t N>
 using Buffer = std::array<std::uint8_t, N>;
 

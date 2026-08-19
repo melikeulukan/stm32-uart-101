@@ -51,6 +51,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/Src/UartPeripheralTest.cpp
     App/Src/Led.cpp
     App/Src/UartPeripheral.cpp
+    App/Src/Tasks/Task.cpp
 )
 
 # Add include paths

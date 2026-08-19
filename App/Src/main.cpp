@@ -26,6 +26,7 @@
 
 #include "Led.hpp"
 #include "UartPeripheralTest.hpp"
+#include "Tasks/DefaultTask.hpp"
 
 #include <string.h>
 #include <stdio.h>
@@ -56,13 +57,7 @@ UART_HandleTypeDef huart3;
 DMA_HandleTypeDef hdma_usart1_tx;
 DMA_HandleTypeDef hdma_usart2_rx;
 
-/* Definitions for defaultTask */
-osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = {
-  .name = "defaultTask",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
+
 
 
 /* USER CODE BEGIN PV */
@@ -102,7 +97,6 @@ static void MX_RTC_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
-void StartDefaultTask(void *argument);
 
 
 /* USER CODE BEGIN PFP */
@@ -200,10 +194,12 @@ int main(void)
 
   /* Create the thread(s) */
   /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
   
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  static DefaultTask defaultTask; // static olmalı, yoksa main() bittiğinde yok olur
+  defaultTask.start();
+
   txTaskHandle = osThreadNew(StartTxTask, NULL, &txTask_attributes);
   rxTaskHandle = osThreadNew(StartRxProcessTask, NULL, &rxProcessTask_attributes);
   /* USER CODE END RTOS_THREADS */
@@ -548,7 +544,7 @@ void StartTxTask(void *argument)
 {
   for(;;)
   {
-      HAL_GPIO_TogglePin(GPIOB, LD3_Pin);  // TX gerçekten gönderiyor mu?
+      //HAL_GPIO_TogglePin(GPIOB, LD3_Pin);  // TX gerçekten gönderiyor mu?
 
       //messages of different length
       if(sim_step==0)
@@ -648,7 +644,7 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
 }
 
 
-/* USER CODE END 4 */
+/* END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
 /**
@@ -657,17 +653,6 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
   * @retval None
   */
 /* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument)
-{
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
-  for(;;)
-  {
-    HAL_GPIO_TogglePin(GPIOB, LD1_Pin);
-    osDelay(500);
-  }
-  /* USER CODE END 5 */
-}
 
 
 /**

@@ -11,7 +11,7 @@ class UartTransport : public UartPeripheral {
 
         void send(const uint8_t* data, std::size_t len)
         {
-            HAL_UART_Transmit_DMA(handle(), data, static_cast<uint16_t>(len));
+            transmitDma(data, len);
             osSemaphoreAcquire(txDoneSem_, osWaitForever);
         }
 

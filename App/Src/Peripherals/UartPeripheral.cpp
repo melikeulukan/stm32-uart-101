@@ -1,6 +1,6 @@
 #include "Peripherals/UartPeripheral.hpp"
 
-UartPeripheral::UartPeripheral(UART_HandleTypeDef* huart) : huart_(huart)
+UartPeripheral::UartPeripheral(HalHandle* huart) : huart_(huart)
 {
     for(auto& entry : table_)
     {
@@ -12,7 +12,7 @@ UartPeripheral::UartPeripheral(UART_HandleTypeDef* huart) : huart_(huart)
     }
 }
 
-UartPeripheral* UartPeripheral::find(UART_HandleTypeDef* huart)
+UartPeripheral* UartPeripheral::find(HalHandle* huart)
 {
     for(auto* entry : table_)
     {
@@ -22,4 +22,20 @@ UartPeripheral* UartPeripheral::find(UART_HandleTypeDef* huart)
         }
     }
     return nullptr;
+}
+
+void HAL_UARTEx_RxEventCallback(UartPeripheral::HalHandle *huart, uint16_t Size)
+{
+    if (UartPeripheral* peripheral = UartPeripheral::find(huart))
+    {
+        peripheral->onRxEvent(Size);
+    }
+}
+
+void HAL_UART_TxCpltCallback(UartPeripheral::HalHandle *huart)
+{
+    if (UartPeripheral* peripheral = UartPeripheral::find(huart))
+    {
+        peripheral->onTxComplete();
+    }
 }

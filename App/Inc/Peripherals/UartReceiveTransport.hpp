@@ -12,15 +12,15 @@ using Buffer = std::array<std::uint8_t, N>;
 
 class UartReceiveTransport : public UartPeripheral {
     public:
-        UartReceiveTransport(UART_HandleTypeDef* huart, DMA_HandleTypeDef* hdma, osMessageQueueId_t rxQueue)
+        UartReceiveTransport(UartPeripheral::HalHandle* huart, DMA_HandleTypeDef* hdma, osMessageQueueId_t rxQueue)
             : UartPeripheral(huart), hdma_(hdma), rxQueue_(rxQueue) {
         }
 
         // Ilk dinlemeyi baslatir, rxQueue olusturulduktan sonra, bir kere cagrilir.
         void startListening()
         {
-            HAL_UARTEx_ReceiveToIdle_DMA(handle(), dmaBuffer_.data(), dmaBuffer_.size());
-            __HAL_DMA_DISABLE_IT(hdma_, DMA_IT_HT);
+            receiveDma(dmaBuffer_.data(), dmaBuffer_.size());
+            disableHalfTransferIt();
         }
 
         // Bir sonraki paket gelene kadar bloklar.
@@ -33,7 +33,7 @@ class UartReceiveTransport : public UartPeripheral {
     private:
         void onRxEvent(uint16_t size) override
         {
-            HAL_UART_DMAStop(handle());
+            stopDma();
 
             if (size >= packet_.size())
             {
@@ -44,7 +44,12 @@ class UartReceiveTransport : public UartPeripheral {
 
             osMessageQueuePut(rxQueue_, &size, 0, 0);
 
-            HAL_UARTEx_ReceiveToIdle_DMA(handle(), dmaBuffer_.data(), dmaBuffer_.size());
+            receiveDma(dmaBuffer_.data(), dmaBuffer_.size());
+            disableHalfTransferIt();
+        }
+
+        void disableHalfTransferIt()
+        {
             __HAL_DMA_DISABLE_IT(hdma_, DMA_IT_HT);
         }
 

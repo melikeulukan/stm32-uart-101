@@ -6,7 +6,9 @@
 
 class UartPeripheral {
     public:
-        explicit UartPeripheral(UART_HandleTypeDef* huart);
+        using HalHandle = UART_HandleTypeDef;
+
+        explicit UartPeripheral(HalHandle* huart);
         virtual ~UartPeripheral() = default;
 
         UartPeripheral(const UartPeripheral&) = delete;
@@ -16,13 +18,29 @@ class UartPeripheral {
         virtual void onRxEvent(uint16_t size) {}
         virtual void onError(std::uint32_t errorCode) {}
 
-        UART_HandleTypeDef* handle() const { return huart_; }
+        HalHandle* handle() const { return huart_; }
 
-        static UartPeripheral* find(UART_HandleTypeDef* huart);
+        static UartPeripheral* find(HalHandle* huart);
 
     protected:
-        UART_HandleTypeDef* huart_;
-    
+        HalHandle* huart_;
+
+        // Ham HAL cagrilarina kisa, okunakli isimler.
+        void transmitDma(const uint8_t* data, std::size_t len)
+        {
+            HAL_UART_Transmit_DMA(huart_, data, static_cast<uint16_t>(len));
+        }
+
+        void receiveDma(uint8_t* buffer, std::size_t len)
+        {
+            HAL_UARTEx_ReceiveToIdle_DMA(huart_, buffer, static_cast<uint16_t>(len));
+        }
+
+        void stopDma()
+        {
+            HAL_UART_DMAStop(huart_);
+        }
+
     private:
         static constexpr std::size_t MAX_UARTS = 3;
         static inline std::array<UartPeripheral*, MAX_UARTS> table_{};

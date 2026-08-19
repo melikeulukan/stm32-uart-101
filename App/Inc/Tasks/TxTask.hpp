@@ -1,19 +1,18 @@
 #pragma once
 #include "Task.hpp"
-#include "UartPeripheral.hpp"
 #include <cstring>
 #include <cstdio>
 
+template<typename Transport>
 class TxTask : public Task{
     private:
-        UartPeripheral* uart_;
-        osSemaphoreId_t txDoneSem_;
+        Transport& transport_;
         char buffer_[64];
         uint8_t simStep_{0};
 
     public:
-        explicit TxTask(UartPeripheral* uart, osSemaphoreId_t txDoneSem)
-            : Task("txTask", 128, osPriorityNormal), uart_(uart), txDoneSem_(txDoneSem) {
+        explicit TxTask(Transport& transport)
+            : Task("TxTask", 128, osPriorityNormal), transport_(transport) {
 
         }
 
@@ -40,8 +39,7 @@ class TxTask : public Task{
                     simStep_=0;
                 }
 
-                HAL_UART_Transmit_DMA(uart_->handle(), (uint8_t*)buffer_, strlen(buffer_));
-                osSemaphoreAcquire(txDoneSem_, osWaitForever);
+                transport_.send(reinterpret_cast<const uint8_t*>(buffer_), strlen(buffer_));
 
                 osDelay(1000);
             }

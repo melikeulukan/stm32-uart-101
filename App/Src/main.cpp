@@ -1,21 +1,3 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
@@ -24,31 +6,18 @@
 /* USER CODE BEGIN Includes */
 #include "task.h"
 
-#include "Led.hpp"
-#include "UartPeripheral.hpp"
-#include "UartPeripheralTest.hpp"
+#include "Peripherals/UartPeripheral.hpp"
+#include "Peripherals/UartTransport.hpp"
+#include "Peripherals/UartReceiveTransport.hpp"
 #include "Tasks/DefaultTask.hpp"
 #include "Tasks/TxTask.hpp"
+#include "Tasks/RxTask.hpp"
 
 #include <string.h>
 #include <stdio.h>
 
 /* USER CODE END Includes */
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 RTC_HandleTypeDef hrtc;
@@ -59,28 +28,10 @@ UART_HandleTypeDef huart3;
 DMA_HandleTypeDef hdma_usart1_tx;
 DMA_HandleTypeDef hdma_usart2_rx;
 
-
-
-
 /* USER CODE BEGIN PV */
-
-osThreadId_t rxTaskHandle;
-const osThreadAttr_t rxProcessTask_attributes = {
-.name= "RxProcessTask",
-.stack_size = 512 * 4,
-.priority = (osPriority_t) osPriorityAboveNormal,
-};
-
-char tx1_buffer[64];     //gönderilecek veri
-uint8_t rx2_buffer[64];  //alınan veri
-uint8_t rx2_main_buffer[64];
-volatile uint16_t rx2_len=0;
-uint32_t rx2_counter = 0;
 
 osMessageQueueId_t rxQueueHandle;
 osSemaphoreId_t txDoneSemHandle;
-
-uint8_t sim_step=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,26 +43,8 @@ static void MX_USART3_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 
-
-/* USER CODE BEGIN PFP */
-void StartRxProcessTask(void *argument);
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
-/* USER CODE END 0 */
-
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
 int main(void)
 {
-
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -137,25 +70,10 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  int uartTestResult = App_UartPeripheralTest();
-  char uartTestMsg[64];
-  int uartTestLen = snprintf(uartTestMsg, sizeof(uartTestMsg),
-                              "UartPeripheral test: %s\r\n",
-                              uartTestResult ? "OK" : "FAIL");
-  HAL_UART_Transmit(&huart3, (uint8_t*)uartTestMsg, uartTestLen, HAL_MAX_DELAY);
-  
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx2_buffer, sizeof(rx2_buffer));
-  
-  // Half transfer interrupt kapatıldı. Sadece transfer tamamlandığında kesme alacağız.
-  __HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT); 
-
-
   /* USER CODE END 2 */
 
   /* Init scheduler */
   osKernelInitialize();
-
-  static UartPeripheral uart1(&huart1);
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -187,16 +105,20 @@ int main(void)
 
   /* USER CODE END RTOS_QUEUES */
 
-  
+  static UartTransport uart1(&huart1, txDoneSemHandle);
+  static UartReceiveTransport uart2(&huart2, &hdma_usart2_rx, rxQueueHandle);
+  uart2.startListening();
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   static DefaultTask defaultTask; // static olmalı, yoksa main() bittiğinde yok olur
-  static TxTask txTask(&uart1, txDoneSemHandle);
+  static TxTask<UartTransport> txTask(uart1);
+  static RxTask<UartReceiveTransport> rxTask(uart2, &huart3);
 
   defaultTask.start();
   txTask.start();
+  rxTask.start();
 
-  rxTaskHandle = osThreadNew(StartRxProcessTask, NULL, &rxProcessTask_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -208,62 +130,6 @@ int main(void)
 
   /* We should never get here as control is now taken by the scheduler */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-#if 0
-  while (1)
-  {
-
-    if (!tx1_busy)
-    {
-      tx1_busy = 1;
-
-      //messages of different length
-      if(sim_step==0)
-      {
-        sprintf(tx1_buffer,  "short\r\n");
-      }
-      else if(sim_step==1)
-      {
-        sprintf(tx1_buffer, "this is a longer message\r\n");
-      }
-      else if(sim_step==2)
-      {
-        sprintf(tx1_buffer, "this is appearently a long long message, like really long\r\n");
-      }
-      sim_step++;
-      if(sim_step>2)
-      {
-        sim_step=0;
-      }
-
-      HAL_UART_Transmit_DMA(&huart1, (uint8_t*)tx1_buffer, strlen(tx1_buffer));
-    }
-
-    if(rx2_flag==1)
-    {
-      rx2_flag=0;
-      rx2_counter++;
-
-      rx2_main_buffer[rx2_len] = '\0';
-
-      char status_msg[128];
-      int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] (len: %u) - usart2 received: %s", rx2_counter, rx2_len, rx2_main_buffer);
-      HAL_UART_Transmit(&huart3, (uint8_t*)status_msg, len, HAL_MAX_DELAY);
-
-    }
-    else
-    {
-      char err_msg[]="no data received\r\n";
-      HAL_UART_Transmit(&huart3, (uint8_t*)err_msg, sizeof(err_msg)-1, HAL_MAX_DELAY);
-    }
-    HAL_Delay(1000);
-  }
-#endif
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-  /* USER CODE END 3 */
 }
 
 /**
@@ -317,11 +183,6 @@ void SystemClock_Config(void)
   }
 }
 
-/**
-  * @brief RTC Initialization Function
-  * @param None
-  * @retval None
-  */
 static void MX_RTC_Init(void)
 {
 
@@ -352,11 +213,6 @@ static void MX_RTC_Init(void)
 
 }
 
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
 static void MX_USART1_UART_Init(void)
 {
 
@@ -387,11 +243,6 @@ static void MX_USART1_UART_Init(void)
 
 }
 
-/**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
 static void MX_USART2_UART_Init(void)
 {
 
@@ -422,11 +273,6 @@ static void MX_USART2_UART_Init(void)
 
 }
 
-/**
-  * @brief USART3 Initialization Function
-  * @param None
-  * @retval None
-  */
 static void MX_USART3_UART_Init(void)
 {
 
@@ -476,11 +322,6 @@ static void MX_DMA_Init(void)
 
 }
 
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -535,59 +376,21 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-
-void StartRxProcessTask(void *argument)
-{
-  uint16_t received_len;
-
-  for(;;)
-  {
-    if(osMessageQueueGet(rxQueueHandle, &received_len, NULL, osWaitForever) == osOK)
-    {
-      rx2_len= received_len;
-      rx2_counter++;
-      rx2_main_buffer[rx2_len] = '\0';
-
-      char status_msg[128];
-      int len = snprintf(status_msg, sizeof(status_msg), "[packet %lu] (len: %u) - usart2 received: %s", rx2_counter, rx2_len, rx2_main_buffer);
-      HAL_UART_Transmit(&huart3, (uint8_t*)status_msg, len, HAL_MAX_DELAY);
-  }else{
-    char err_msg[]="no data received\r\n";
-    HAL_UART_Transmit(&huart3, (uint8_t*)err_msg, sizeof(err_msg)-1, HAL_MAX_DELAY);
-  }
-  UBaseType_t freeStack = uxTaskGetStackHighWaterMark(NULL); // NULL = kendi task'ı
-  char stack_msg[64];
-  int len = snprintf(stack_msg, sizeof(stack_msg), "[RxProcessTask] free stack: %lu words (%lu bytes)\r\n", (unsigned long)freeStack, (unsigned long)(freeStack * 4));
-  HAL_UART_Transmit(&huart3, (uint8_t*)stack_msg, len, HAL_MAX_DELAY);
-  osDelay(1000);
-  }
-}
-
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-    if (huart->Instance == USART2)
+    if (UartPeripheral* peripheral = UartPeripheral::find(huart))
     {
-        HAL_UART_DMAStop(&huart2); // Stop the DMA transfer to process the received data
-
-        memcpy(rx2_main_buffer, rx2_buffer, Size); // Copy the received data to the main buffer
-        
-        uint16_t len = Size;
-        osMessageQueuePut(rxQueueHandle, &len, 0,0);
-
-
-        HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx2_buffer, sizeof(rx2_buffer));
-        __HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
+        peripheral->onRxEvent(Size);
     }
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance == USART1)
+    if (UartPeripheral* peripheral = UartPeripheral::find(huart))
     {
-        osSemaphoreRelease(txDoneSemHandle); // Release the semaphore to signal that transmission is complete
+        peripheral->onTxComplete();
     }
 }
-
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
 {
@@ -595,9 +398,9 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
   {
     HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);   // yeşil = TxTask taştı
   }
-  else if (strcmp(pcTaskName, "RxProcessTask") == 0)
+  else if (strcmp(pcTaskName, "RxTask") == 0)
   {
-    HAL_GPIO_WritePin(GPIOB, LD2_Pin, GPIO_PIN_SET);   // mavi = RxProcessTask taştı
+    HAL_GPIO_WritePin(GPIOB, LD2_Pin, GPIO_PIN_SET);   // mavi = RxTask taştı
   }
   else
   {
@@ -606,26 +409,8 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
   while(1) { }
 }
 
-
 /* END 4 */
 
-/* USER CODE BEGIN Header_StartDefaultTask */
-/**
-  * @brief  Function implementing the defaultTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_StartDefaultTask */
-
-
-/**
-  * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM6 interrupt took place, inside
-  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
-  * a global variable "uwTick" used as application time base.
-  * @param  htim : TIM handle
-  * @retval None
-  */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
@@ -640,10 +425,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE END Callback 1 */
 }
 
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */

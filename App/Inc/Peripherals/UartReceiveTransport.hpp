@@ -1,0 +1,55 @@
+#pragma once
+#include "UartPeripheral.hpp"
+#include "cmsis_os2.h"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+
+
+template<std::size_t N>
+using Buffer = std::array<std::uint8_t, N>;
+
+class UartReceiveTransport : public UartPeripheral {
+    public:
+        UartReceiveTransport(UART_HandleTypeDef* huart, DMA_HandleTypeDef* hdma, osMessageQueueId_t rxQueue)
+            : UartPeripheral(huart), hdma_(hdma), rxQueue_(rxQueue) {
+        }
+
+        // Ilk dinlemeyi baslatir, rxQueue olusturulduktan sonra, bir kere cagrilir.
+        void startListening()
+        {
+            HAL_UARTEx_ReceiveToIdle_DMA(handle(), dmaBuffer_.data(), dmaBuffer_.size());
+            __HAL_DMA_DISABLE_IT(hdma_, DMA_IT_HT);
+        }
+
+        // Bir sonraki paket gelene kadar bloklar.
+        const uint8_t* receive(uint16_t& outLen)
+        {
+            osMessageQueueGet(rxQueue_, &outLen, NULL, osWaitForever);
+            return packet_.data();
+        }
+
+    private:
+        void onRxEvent(uint16_t size) override
+        {
+            HAL_UART_DMAStop(handle());
+
+            if (size >= packet_.size())
+            {
+                size = packet_.size() - 1;
+            }
+            memcpy(packet_.data(), dmaBuffer_.data(), size);
+            packet_[size] = '\0';
+
+            osMessageQueuePut(rxQueue_, &size, 0, 0);
+
+            HAL_UARTEx_ReceiveToIdle_DMA(handle(), dmaBuffer_.data(), dmaBuffer_.size());
+            __HAL_DMA_DISABLE_IT(hdma_, DMA_IT_HT);
+        }
+
+        DMA_HandleTypeDef* hdma_;
+        osMessageQueueId_t rxQueue_;
+        Buffer<64> dmaBuffer_{};
+        Buffer<64> packet_{};
+};

@@ -1,4 +1,4 @@
-#include "UartPeripheral.hpp"
+#include "Peripherals/UartPeripheral.hpp"
 
 UartPeripheral::UartPeripheral(UART_HandleTypeDef* huart) : huart_(huart)
 {

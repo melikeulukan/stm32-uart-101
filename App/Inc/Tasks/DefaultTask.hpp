@@ -14,7 +14,6 @@ class DefaultTask : public Task{
                 {
                     HAL_GPIO_TogglePin(GPIOB, LD3_Pin);
                     osDelay(500);
-                }
-                
+                } 
         };
 };

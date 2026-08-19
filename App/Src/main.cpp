@@ -25,8 +25,10 @@
 #include "task.h"
 
 #include "Led.hpp"
+#include "UartPeripheral.hpp"
 #include "UartPeripheralTest.hpp"
 #include "Tasks/DefaultTask.hpp"
+#include "Tasks/TxTask.hpp"
 
 #include <string.h>
 #include <stdio.h>
@@ -62,14 +64,6 @@ DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
 
-
-osThreadId_t txTaskHandle;
-const osThreadAttr_t txTask_attributes = {
-.name= "TxTask",
-.stack_size = 128 * 4,
-.priority = (osPriority_t) osPriorityNormal,
-};
-
 osThreadId_t rxTaskHandle;
 const osThreadAttr_t rxProcessTask_attributes = {
 .name= "RxProcessTask",
@@ -100,7 +94,6 @@ static void MX_USART2_UART_Init(void);
 
 
 /* USER CODE BEGIN PFP */
-void StartTxTask(void *argument);
 void StartRxProcessTask(void *argument);
 /* USER CODE END PFP */
 
@@ -162,6 +155,8 @@ int main(void)
   /* Init scheduler */
   osKernelInitialize();
 
+  static UartPeripheral uart1(&huart1);
+
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
@@ -192,15 +187,15 @@ int main(void)
 
   /* USER CODE END RTOS_QUEUES */
 
-  /* Create the thread(s) */
-  /* creation of defaultTask */
   
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   static DefaultTask defaultTask; // static olmalı, yoksa main() bittiğinde yok olur
-  defaultTask.start();
+  static TxTask txTask(&uart1, txDoneSemHandle);
 
-  txTaskHandle = osThreadNew(StartTxTask, NULL, &txTask_attributes);
+  defaultTask.start();
+  txTask.start();
+
   rxTaskHandle = osThreadNew(StartRxProcessTask, NULL, &rxProcessTask_attributes);
   /* USER CODE END RTOS_THREADS */
 
@@ -540,38 +535,6 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-void StartTxTask(void *argument)
-{
-  for(;;)
-  {
-      //HAL_GPIO_TogglePin(GPIOB, LD3_Pin);  // TX gerçekten gönderiyor mu?
-
-      //messages of different length
-      if(sim_step==0)
-      {
-        sprintf(tx1_buffer,  "short\r\n");
-      }
-      else if(sim_step==1)
-      {
-        sprintf(tx1_buffer, "this is a longer message\r\n");
-      }
-      else if(sim_step==2)
-      {
-        sprintf(tx1_buffer, "this is appearently a long long message, like really long\r\n");
-      }
-      sim_step++;
-
-      if(sim_step>2)
-      {
-        sim_step=0;
-      }
-
-      HAL_UART_Transmit_DMA(&huart1, (uint8_t*)tx1_buffer, strlen(tx1_buffer));
-      osSemaphoreAcquire(txDoneSemHandle, osWaitForever);
-
-      osDelay(1000);
-  }
-}
 
 void StartRxProcessTask(void *argument)
 {

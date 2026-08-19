@@ -1,3 +1,18 @@
 build
 mx.scratch
-!.settings
+
+# STM32CubeIDE bundle manager lock files (machine/platform-specific, auto-regenerated)
+.settings/
+
+# CubeMX project state (Generate Code is no longer used on this project)
+.mxproject
+
+# Auto-derived from compile_commands.json by CMake Tools
+.vscode/c_cpp_properties.json
+
+# Local CMake preset overrides
+CMakeUserPresets.json
+
+# OS junk
+.DS_Store
+Thumbs.db

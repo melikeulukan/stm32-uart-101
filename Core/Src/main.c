@@ -24,6 +24,9 @@
 /* USER CODE BEGIN Includes */
 #include "task.h"
 
+#include "Led.hpp"
+#include "UartPeripheralTest.hpp"
+
 #include <string.h>
 #include <stdio.h>
 
@@ -63,6 +66,7 @@ const osThreadAttr_t defaultTask_attributes = {
 
 
 /* USER CODE BEGIN PV */
+
 
 osThreadId_t txTaskHandle;
 const osThreadAttr_t txTask_attributes = {
@@ -146,6 +150,12 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  int uartTestResult = App_UartPeripheralTest();
+  char uartTestMsg[64];
+  int uartTestLen = snprintf(uartTestMsg, sizeof(uartTestMsg),
+                              "UartPeripheral test: %s\r\n",
+                              uartTestResult ? "OK" : "FAIL");
+  HAL_UART_Transmit(&huart3, (uint8_t*)uartTestMsg, uartTestLen, HAL_MAX_DELAY);
   
   HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx2_buffer, sizeof(rx2_buffer));
   

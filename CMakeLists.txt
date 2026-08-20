@@ -1,12 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
 
-#
-# This file is generated only once,
-# and is not re-generated if converter is called multiple times.
-#
-# User is free to modify the file as much as necessary
-#
-
 # Setup compiler settings
 set(CMAKE_CXX_STANDARD 20)
 
@@ -15,7 +8,6 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-
 
 # Define the build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -73,3 +65,18 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
     # Add user defined libraries
 )
+
+set(MAVLINK_PYTHON "" CACHE FILEPATH "Path to python.exe with pymavlink installed (optional)")
+
+if(MAVLINK_PYTHON)
+    get_filename_component(MAVLINK_ENV_DIR ${MAVLINK_PYTHON} DIRECTORY)
+    set(MAVGEN_SCRIPT ${MAVLINK_ENV_DIR}/mavgen.py)
+    if(EXISTS ${MAVGEN_SCRIPT})
+        add_custom_target(mavlink_generate
+            COMMAND ${MAVLINK_PYTHON} ${MAVGEN_SCRIPT} --lang=C --wire-protocol=2.0
+                    -o ${CMAKE_SOURCE_DIR}/Core/Inc/mavlink
+                    ${CMAKE_SOURCE_DIR}/mavlink/dialects/custom.xml
+            COMMENT "Regenerating MAVLink headers from custom.xml"
+        )
+    endif()
+endif()

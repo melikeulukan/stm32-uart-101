@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<mavlink>
+    <version>1</version>
+
+    <dialect>8</dialect>
+
+    <enums>
+        <enum name="MISSION_STATE">
+            <entry value= "0" name="ASCENT"/>
+            <entry value= "1" name="APOGEE"/>
+            <entry value= "2" name="DESCENT"/>
+            <entry value= "3" name="PAYLOAD_RELEASE"/>
+            <entry value= "4" name="LANDED"/>
+        </enum>
+    </enums>
+
+    <messages>
+        <message id="200" name="MISSION_TELEMETRY">
+            <description>Telemetry packet for mission data</description>
+            
+            <field type="uint32_t" name="mission_time">The time elapsed since the mission started in milliseconds</field>
+            <field type="uint16_t" name="packet_count">The number of packets sent since the mission started</field>
+            <field type="uint8_t" name="state" enum="MISSION_STATE">The current active state of the mission</field>
+            
+            <field type="float" name="altitude">The calculated altitude of the system in meters</field>
+            <field type="float" name="temperature">The ambient temperature in degrees Celsius</field>
+            <field type="float" name="pressure">The atmospheric pressure in hectopascals (hPa)</field>
+            
+            <!-- IMU -->
+            <field type="float" name="gyro_r">The gyroscope roll rate in degrees per second</field>
+            <field type="float" name="gyro_p">The gyroscope pitch rate in degrees per second</field>
+            <field type="float" name="gyro_y">The gyroscope yaw rate in degrees per second</field>
+            <field type="float" name="accel_r">The accelerometer roll (X-axis) in meters per second squared</field>
+            <field type="float" name="accel_p">The accelerometer pitch (Y-axis) in meters per second squared</field>
+            <field type="float" name="accel_y">The accelerometer yaw (Z-axis) in meters per second squared</field>
+            
+            <!-- GPS-->
+            <field type="int32_t" name="gps_latitude" units="degE7">The GPS latitude coordinate (degrees * 1E7)</field>
+            <field type="int32_t" name="gps_longitude" units="degE7">The GPS longitude coordinate (degrees * 1E7)</field>
+            <field type="uint8_t" name="gps_sats">The number of visible and locked GPS satellites</field>
+        </message>
+    </messages>
+
+</mavlink>

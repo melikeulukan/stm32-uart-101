@@ -13,6 +13,8 @@ mx.scratch
 # Local CMake preset overrides
 CMakeUserPresets.json
 
+Core/Inc/mavlink/
+
 # OS junk
 .DS_Store
 Thumbs.db

@@ -4,26 +4,20 @@
 
 #include "task.h"
 
+#include "PeripheralHandles.hpp"
 #include "HardwareInit.hpp"
 #include "Peripherals/UartPeripheral.hpp"
 #include "Peripherals/UartSendTransport.hpp"
 #include "Peripherals/UartReceiveTransport.hpp"
 #include "Tasks/DefaultTask.hpp"
 #include "Tasks/TxTask.hpp"
+#include "Tasks/MavlinkTxTask.hpp"
+
 #include "Tasks/RxTask.hpp"
+#include "Tasks/MavlinkRxTask.hpp"
 
 #include <string.h>
 #include <stdio.h>
-
-
-/* Private variables ---------------------------------------------------------*/
-RTC_HandleTypeDef hrtc;
-
-UART_HandleTypeDef huart1;
-UART_HandleTypeDef huart2;
-UART_HandleTypeDef huart3;
-DMA_HandleTypeDef hdma_usart1_tx;
-DMA_HandleTypeDef hdma_usart2_rx;
 
 int main(void)
 {
@@ -54,14 +48,18 @@ int main(void)
   static UartSendTransport uart1(&huart1, txDoneSemHandle);
   static UartReceiveTransport uart2(&huart2, &hdma_usart2_rx, rxQueueHandle);
   uart2.startListening();
-  
-  static DefaultTask defaultTask; // static olmalı, yoksa main() bittiğinde yok olur
-  static TxTask<UartSendTransport> txTask(uart1);
-  static RxTask<UartReceiveTransport> rxTask(uart2, &huart3);
 
-  defaultTask.start();
-  txTask.start();
-  rxTask.start();
+  //static DefaultTask defaultTask; // static olmalı, yoksa main() bittiğinde yok olur
+  //static TxTask<UartSendTransport> txTask(uart1);
+  static MavlinkTxTask<UartSendTransport> mavlinkTxTask(uart1);
+  //static RxTask<UartReceiveTransport> rxTask(uart2, &huart3);
+  static MavlinkRxTask<UartReceiveTransport> mavlinkRxTask(uart2, &huart3);
+
+  //defaultTask.start();
+  //txTask.start();
+  mavlinkTxTask.start();
+  //rxTask.start();
+  mavlinkRxTask.start();
 
   /* Start scheduler */
   osKernelStart();
@@ -72,11 +70,11 @@ int main(void)
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
 {
-  if (strcmp(pcTaskName, "TxTask") == 0)
+  if (strcmp(pcTaskName, "MavlinkTxTask") == 0)
   {
     HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);   // yeşil = TxTask taştı
   }
-  else if (strcmp(pcTaskName, "RxTask") == 0)
+  else if (strcmp(pcTaskName, "RxTask") == 0 || strcmp(pcTaskName, "MavlinkRxTask") == 0)
   {
     HAL_GPIO_WritePin(GPIOB, LD2_Pin, GPIO_PIN_SET);   // mavi = RxTask taştı
   }

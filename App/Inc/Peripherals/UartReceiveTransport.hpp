@@ -25,7 +25,7 @@ class UartReceiveTransport : public UartPeripheral {
         // Bir sonraki paket gelene kadar bloklar.
         const uint8_t* receive(uint16_t& outLen)
         {
-            osMessageQueueGet(rxQueue_, &outLen, NULL, osWaitForever);
+            osMessageQueueGet(rxQueue_, &outLen, nullptr, osWaitForever);
             return packet_.data();
         }
 
@@ -36,7 +36,7 @@ class UartReceiveTransport : public UartPeripheral {
 
             if (size >= packet_.size())
             {
-                size = packet_.size() - 1;
+                size = static_cast<uint16_t>(packet_.size() - 1);
             }
             memcpy(packet_.data(), dmaBuffer_.data(), size);
             packet_[size] = '\0';
@@ -54,6 +54,6 @@ class UartReceiveTransport : public UartPeripheral {
 
         DMA_HandleTypeDef* hdma_;
         osMessageQueueId_t rxQueue_;
-        Buffer<64> dmaBuffer_{};
-        Buffer<64> packet_{};
+        Buffer<128> dmaBuffer_{};
+        Buffer<128> packet_{};
 };
